@@ -1,0 +1,189 @@
+{
+  "experiment": "multigas_premise_and_rolling_evaluation",
+  "date": "2026-09-29",
+  "plan": "04_研究计划/方向3_推荐方案_多气体条件联动_20260929.md, steps 1 and 2",
+  "data": {
+    "co2_raw": "data/raw/co2_{brw,mlo,smo,spo}_surface-insitu_1_ccgg_DailyData.txt (same files as the project's daily panel)",
+    "ch4_raw": "data/raw/ch4_{brw,mlo,smo}_surface-insitu_1_ccgg_DailyData.txt, downloaded 2026-09-29 from https://gml.noaa.gov/aftp/data/trace_gases/ch4/in-situ/surface/txt/",
+    "not_available": "NOAA publishes no in-situ daily CH4 for SPO and no in-situ daily CO for any of the four stations at that location; the SMO CH4 file covers 2025 only",
+    "validity_rule": "value > 0 and nvalue > 0 and qcflag[:2] == '..' and qcflag[2] != 'P' (the rule of the project's prepare_dataset.py)",
+    "panel_period": [
+      "1990-01-01",
+      "2025-12-31"
+    ]
+  },
+  "windows": {
+    "context": 14,
+    "horizon": 14,
+    "history_fill": "within-window linear interpolation; nearest real value for at most 7 days at either edge; reject if a series has no value or a longer edge gap (unchanged project rule)",
+    "labels": "never imputed; at least one observed future value in the group",
+    "groups": {
+      "co2": [
+        "co2_brw",
+        "co2_mlo",
+        "co2_smo",
+        "co2_spo"
+      ],
+      "ch4": [
+        "ch4_brw",
+        "ch4_mlo"
+      ]
+    }
+  },
+  "timesfm": {
+    "device": "mps (reproduces the project's caches exactly; CPU differs on a few windows because the detrending decision flips)",
+    "batch": 8,
+    "grouping": "each gas encoded as its own multivariate group (CO2: four stations jointly, as in the project; CH4: BRW and MLO jointly). TimesFM 3 attends across the series of a group.",
+    "sensitivity": "CH4 stations encoded one at a time"
+  },
+  "step1_premise": {
+    "question": "Do the TimesFM forecast errors of CO2 and CH4 at the same station move together, and does that depend on the season?",
+    "error_measure": "normal score of the observed value under the TimesFM quantile function (linear between the nine quantiles, normal tails), as in the copula project",
+    "primary_data": "forecast targets 2017-01-01..2022-12-31 only (the project's training years), 14-day grid anchored at 2017-01-01; windows must be valid for the CO2 four-station group and the CH4 group",
+    "supplementary_data": "daily sliding windows with targets 2000-01-01..2022-12-31 (still no 2023-2025 data); overlapping windows, so intervals use blocks of calendar months",
+    "statistics": "same-day correlation between the CO2 and CH4 scores of one station, pooled over lead days; per season of the forecast origin (DJF, MAM, JJA, SON); correlation of 14-day means; bootstrap 95% intervals over windows (primary) or calendar-month blocks (supplementary)",
+    "decision_rule_fixed_before_computing": {
+      "pass": "for at least one station: |overall correlation| >= 0.3 AND (largest seasonal correlation - smallest seasonal correlation) >= 0.3, on the primary data",
+      "borderline": "fails 'pass' but for at least one station: some season has |correlation| >= 0.3 AND the seasonal range >= 0.3 (a linkage confined to part of the year)",
+      "fail": "otherwise",
+      "note": "the plan said '|r| >= 0.3 at one station and seasons differ by >= 0.3' without saying overall or seasonal; both readings are reported, 'pass' uses the stricter one"
+    }
+  },
+  "step2_rolling": {
+    "windows": "daily sliding (stride 1) for the CO2 four-station group, forecast targets 2010-01-01..2025-12-31",
+    "folds": "test year Y in 2020..2025; calibration Y-1; validation Y-2; training 2010-01-01..end of Y-3; targets of a window lie inside one period",
+    "methods_started": [
+      "native TimesFM + per-station-per-lead CQR (B4)",
+      "TimesFM marginal + independent / static Gaussian / empirical copula (B0, B2, B3), dependence from the training years of the fold",
+      "residual Engression with per-station noise (timing run on one fold first)"
+    ],
+    "metrics": "unchanged uq14 metrics (single cell before/after conformal) and the copula project's joint metrics",
+    "uncertainty": "block bootstrap over calendar months of the forecast origin, pooled over folds"
+  },
+  "step3_multigas": {
+    "fixed_before_any_step3_result": true,
+    "user_constraints": "no conformal calibration and no empirical copula anywhere in step 3 (instruction of 2026-09-29)",
+    "cells": "2 stations (BRW, MLO) x 2 gases (CO2 ppm, CH4 ppb) x 14 days; windows with >=1 CO2 label and >=1 CH4 label at BRW/MLO",
+    "features": "CO2 from the four-station TimesFM encoding (project standard), CH4 from the BRW+MLO TimesFM encoding; per cell: TimesFM hidden features, RevIN scale, sorted native median",
+    "folds": "test year Y in 2020..2025; validation Y-1 (every 7th daily window); training 2010-01-01..end of Y-2 (no calibration year is needed without conformal)",
+    "model": "median-locked residual Engression (unchanged rq/engression_np Model 'residual_centered' + rq/station_noise StationHead): sample = TimesFM median + scale * (g - median over samples of g). One network for the four (station, gas) slots.",
+    "variants": {
+      "A_linked_conditional": "slot input = [own TimesFM features, other gas's TimesFM features at the same station, month (sin, cos), 14-day history co-movement of the two gases (detrended correlation), gas indicator]; ONE noise vector per station shared by its two gases; stations independent",
+      "B_unlinked": "same inputs as A; independent noise for each (station, gas) slot, so the gases are independent given the inputs (ablation: value of the cross-gas link)",
+      "C_linked_unconditional": "shared noise per station as in A; slot input = own TimesFM features and gas indicator only (ablation: value of the conditioning inputs)",
+      "D_timesfm_independent": "TimesFM quantile function per cell, independent sampling, no training (reference; not an empirical copula)"
+    },
+    "training": "Energy Score (lambda 1/2) on deviations divided by a fixed per-(station, gas) constant = RMS of (y - TimesFM median) in the fold's training windows, so neither gas nor BRW dominates; AdamW lr 2e-4, wd 0.01, clip 1, batch 32, 16/256/512 samples, noise dim 1280, hidden 64, init spread 0.05, max 80 epochs, patience 12; seeds 17/29/43",
+    "evaluation_no_conformal": {
+      "single_cell": "per gas and per station, original units: MAE, RMSE, CRPS, WIS9, 80% coverage, width, MIS80 (unchanged uq14 metrics; no calibration step)",
+      "cross_gas": "same station and day: CRPS and 80% coverage of the normalized difference (CO2 deviation - CH4 deviation); centered variogram score (p=0.5) over (CO2, CH4) pairs; Brier score of 'both above their TimesFM median'; simultaneous 80% band over the two gases (coverage, width)",
+      "overall": "Energy Score of the normalized 56-vector",
+      "diagnostic": "implied CO2-CH4 correlation in the samples versus the observed correlation of the model's own PIT scores, by season and by history co-movement tercile",
+      "uncertainty": "paired block bootstrap over calendar months of the forecast origin, pooled over the six test years"
+    },
+    "success_criteria": "A beats B on the cross-gas metrics (difference CRPS, cross-gas variogram, joint-exceedance Brier; 95% intervals exclude 0) with single-cell CRPS and MIS80 not significantly worse; and A beats C on the same cross-gas metrics (conditioning adds value)",
+    "implementation_notes_fixed_before_any_step3_result": {
+      "noise_layout": "each (station, gas) slot gets 1280 noise dims = 640 own + 640 'second part'. A and C copy the CO2 slot's second part to the CH4 slot of the same station (the shared vector of the design); B keeps all four independent. Reason: the unchanged warm start reads only the first 14 noise dims, so with ONE fully shared 1280-dim vector the two gases would start identical (correlation +1) while B starts independent, and A vs B would compare different starting points. With this layout A, B and C give identical samples at the start (checked in tests/test_step3.py) and A/C can only reach a cross-gas link by learning it.",
+      "common_random_numbers": "all variants consume the same random stream (the second part is always drawn for 4 slots), so A, B and C are evaluated with the same own noise",
+      "gas_indicator": "one 0/1 input (1 = CH4); A/B input dim 1280+1280+2+1+1 = 2564, C input dim 1281",
+      "history_comovement": "Pearson correlation of the linearly detrended 14-day filled histories of CO2 and CH4 at the station; 0 if a history is constant",
+      "aligned_windows": "7342 daily windows (origins 2000-01-04..2025-12-13); test windows per year 2020..2025: 195, 329, 294, 110, 148, 195 (1271 in total); validation windows used (every 7th): 46, 28, 47, 42, 16, 22",
+      "normalization_constants": "RMS of (y - TimesFM median) per slot in the fold's training windows, about 2.3 ppm (BRW CO2), 1.0 ppm (MLO CO2), 24 ppb (BRW CH4), 17 ppb (MLO CH4)",
+      "validation_score": "normalized ES on the validation windows computed in chunks of 8 windows (same value, less memory)",
+      "per_window_outputs": "single-cell sums per window and slot (CRPS, MIS80, coverage, width, absolute error, count) and all joint metrics as (num, den) per window, for the month-block bootstrap",
+      "supplementary_metrics_not_in_success_criteria": "CRPS/coverage of the normalized gas sum (z_CO2 + z_CH4); Brier over the four sign patterns",
+      "implied_correlation": "Pearson correlation of the normal scores of the sample ranks (per window, station and day) so that it is on the same scale as the correlation of the observed PIT normal scores",
+      "D_seeds": "D has no training; its three seeds are sampling seeds only",
+      "data_note": "BRW CH4 has 45 windows whose 14-day history is almost constant (RevIN scale < 5% of its median, mostly filled gaps); TimesFM gives them an 80% width of 0-3 ppb and the residual model inherits that (its spread is proportional to the scale). 10 of them are test windows (9 in 2020, 1 in 2023). Kept, as in the project's window rule.",
+      "parallel_runs": "9 runs at a time, one BLAS thread each"
+    },
+    "added_while_runs_were_in_progress": {
+      "per_station_cross_gas_scores": "the cross-gas scores are also reported for BRW and MLO separately (added before any step-3 result was seen; runs evaluated earlier were re-scored from their saved checkpoints, which reproduces the earlier numbers exactly - checked for D and for A fold 2025 seed 29)",
+      "dependence_reliability": "supplementary diagnostic, not a success criterion: cells grouped into quintiles of the model's implied CO2-CH4 correlation, observed PIT correlation per group, for A and C. Added after the per-run log lines of some folds had been seen (they show only pooled scores, not correlations) and before any pooled summary or correlation diagnostic was computed",
+      "display_name_of_C": "C is shown as 'linked, sees only its own history': it can still infer the season from its own gas's history"
+    }
+  },
+  "step3_round2_explicit_linkage": {
+    "fixed_before_any_round2_result": true,
+    "date": "2026-09-29",
+    "user_instruction": "好，按你的建议做联动强弱的版本 (2026-09-29). Still no conformal calibration and no empirical copula anywhere.",
+    "motivation": "round 1: A's implied CO2-CH4 correlation stayed at 0.41-0.46 in every month while the observed one ranged from -0.42 to +0.75, so the conditional part was never learned",
+    "model": "same as A (main network, inputs, loss, hyperparameters, folds, seeds, test windows) except the noise coupling. Every slot gets a full 1280-dim standard normal vector (drawn exactly as B's noise, so the random stream is shared with round 1). At station s: CH4 vector = r_s * CO2 vector + sqrt(1 - r_s^2) * the CH4 slot's own vector. Each slot's noise stays standard normal, so the single-cell distributions do not depend on r; r changes only the CO2-CH4 dependence. At the warm start the correlation of the two gases' samples on every day equals r exactly. r is one number per window and station (the noise is not split by day).",
+    "r_head": "r_s = tanh(u_s), u_s = w2 . silu(W1 z_s + b1) + b2, hidden 16. w2 and b2 start at 0, so r = 0 and the model starts identical to B (checked in tests). W1, b1: torch-default uniform init from a separate random stream (the main network's init is unchanged). Own AdamW, lr 2e-3 (fixed a priori, not tuned: the head is tiny and its output must move by O(1) within a few epochs; the main network keeps lr 2e-4), weight decay 0.01, inside the same gradient-norm clipping.",
+    "why_not_TimesFM_features_in_r": "the recommendation mentioned them, but round 1 failed because 3 conditioning inputs were drowned among 2564; the r head therefore sees only the conditions with documented signal. The main network still uses all TimesFM features.",
+    "variants": {
+      "E_explicit_conditional": "z_s = [sin(month), cos(month), 14-day history co-movement of station s, is_BRW, is_MLO]",
+      "F_explicit_constant": "z_s = [is_BRW, is_MLO]: one learned r per station (ablation of the conditions)"
+    },
+    "references_reused": "A, B, C, D from round 1 on the same 1271 test windows",
+    "success_criteria": "(1) E beats F on difference CRPS, cross-gas variogram and both-above Brier (95% month-block intervals entirely below 0): the conditions add value; and (2) E beats B on the same three, with single-cell CRPS and MIS80 of both gases not significantly worse than B",
+    "reported_not_criteria": "E vs A, E vs D, F vs B; learned r by station and month versus the observed correlation; implied versus observed correlation by season, history tercile and quintile of implied correlation",
+    "if_it_fails": "if E's r does not follow the seasons, the next candidate is an extra loss term on the cross-gas relationship (not part of this round)",
+    "runs": "E and F x 6 folds x 3 seeds = 36 runs, 9 at a time"
+  },
+  "step3_round3_pair_energy_score": {
+    "fixed_before_any_round3_result": true,
+    "date": "2026-09-29",
+    "user_instruction": "好，加二维 Energy Score 那个版本做一下 (2026-09-29). Still no conformal calibration and no empirical copula anywhere.",
+    "motivation": "round 2: E's r followed the seasons but never became negative in summer and wandered between epochs and seeds (MLO July r at the selected epoch +0.01 to +0.38), i.e. the 56-dimensional Energy Score gives r a weak signal. This step was written in the round-2 config as the next candidate.",
+    "loss": "L = ES56 + lambda * ES2. ES56 = the unchanged normalized Energy Score of the 56-cell vector (window mean). ES2 = mean, over all (window, station, day) cells of the batch where both gases are observed, of the 2-dimensional Energy Score of the normalized (CO2, CH4) pair divided by sqrt(2) (same pair weight 1/2 and same per-dimension normalization as ES56). lambda = 1, fixed a priori (equal weight for the joint score and the average pair score, both in the same normalized units); not tuned.",
+    "validation": "the same combined loss on the validation windows (every 7th), 256 samples, computed in chunks of 8 windows; early stopping and epoch selection as before",
+    "variants": {
+      "G_explicit_conditional_pairloss": "E (r from month, history co-movement, station) trained with L",
+      "H_explicit_constant_pairloss": "F (one r per station) trained with L"
+    },
+    "everything_else": "identical to round 2: main network and its warm start, r head (hidden 16, output layer starting at 0, lr 2e-3), inputs, folds, seeds, test windows, 16/256/512 samples, random streams",
+    "success_criteria": "(1) G beats H on difference CRPS, cross-gas variogram and both-above Brier (95% month-block intervals entirely below 0): the conditions add value under the stronger loss; (2) G beats B on the same three, with single-cell CRPS and MIS80 of both gases not significantly worse than B",
+    "caveat": "ES2 rewards getting each (CO2, CH4) pair right, which the cross-gas metrics also measure. G vs H compares two models trained with the same loss; G vs B also changes the loss.",
+    "reported_not_criteria": "G vs E and H vs F (effect of the loss), G vs A, G vs D; learned r by station and month; implied versus observed correlation by season, history tercile and quintile of implied correlation",
+    "runs": "G and H x 6 folds x 3 seeds = 36 runs, 9 at a time"
+  },
+  "step3_confirmation_2014_2019": {
+    "fixed_before_any_confirmation_result": true,
+    "date": "2026-09-29",
+    "user_instruction": "在 2014–2019 年上做一下确认 (2026-09-29). Still no conformal calibration and no empirical copula.",
+    "why": "the three step-3 rounds all used the test years 2020-2025, and rounds 2 and 3 were designed after seeing earlier rounds' results. The years 2014-2019 were never test years in any round (they were training/validation data of the 2020-2025 folds, and step 1 used 2000-2022 to establish that the linkage exists).",
+    "folds": "test year Y in 2014..2019; validation Y-1 (every 7th daily window); training 2000-01-01..end of Y-2. Test windows: 328, 320, 308, 325, 344, 321 (1946 in total).",
+    "training_start_change": "training starts in 2000 instead of 2010 so that the amount of training data is comparable to the main evaluation (3838-5346 windows here vs 2569-3852 there); starting in 2010 would leave only 704 windows for 2014. This is the only difference from the main protocol.",
+    "methods": {
+      "G_explicit_conditional_pairloss": "exactly as in round 3 (no setting changed)",
+      "H_explicit_constant_pairloss": "exactly as in round 3",
+      "B_unlinked": "exactly as in round 1",
+      "D_timesfm_independent": "exactly as in round 1 (no training)"
+    },
+    "seeds": [
+      17,
+      29,
+      43
+    ],
+    "success_criteria": "the round-3 rule on the new test years: (1) G beats H on difference CRPS, cross-gas variogram and both-above Brier (95% month-block intervals entirely below 0); (2) G beats B on the same three, with single-cell CRPS and MIS80 of both gases not significantly worse than B. Part (1) is the confirmation of the conditional linkage; part (2) of the linkage itself. Both are reported separately; 'confirmed' means both hold.",
+    "reported_not_criteria": "per-year and per-season differences, learned r by station and month, implied versus observed correlation, quintiles of implied correlation, comparison with D",
+    "runs": "G, H, B x 6 folds x 3 seeds = 54 runs; D for the 6 folds. Started 10 at a time; after ~28 min the machine ran out of memory (10 runs of 1-1.9 GB plus other applications on 24 GB; ~12 GB swap), so launching was stopped, 4 partly trained runs (G and H 2019 seeds 29 and 43, no result yet) were stopped and restarted from scratch, and the rest run at most 6 at a time (scripts/run_confirm_rest.sh). This changes only speed, not any setting or result."
+  },
+  "co2_given_observed_ch4": {
+    "fixed_before_computing": true,
+    "date": "2026-09-30",
+    "user_instruction": "用 CH4 的实际测试值，通过联动调整二氧化碳的覆盖 (2026-09-30)",
+    "scenario": "same station, same day: CH4 has been measured, CO2 is not yet known (gap filling, or CO2 data arriving later). This is conditional estimation, NOT a better 14-day CO2 forecast: when forecasting, future CH4 is unknown too.",
+    "models": "G (conditional linkage, round 3) and H (fixed linkage per station, round 3), unchanged checkpoints; test years 2020-2025 and 2014-2019; the 512 test samples are regenerated with the evaluation seeds, so the unconditional samples are exactly the evaluated ones (checked against the saved per-window scores)",
+    "conditioning": "regression adjustment inside the model's own samples, per window, station and day: b = cov(CO2 samples, CH4 samples) / var(CH4 samples); conditional CO2 samples = CO2 samples - b * (CH4 samples - observed CH4). Exact for a linear/Gaussian link, keeps the shape of the residual spread. Nothing is estimated from observed data.",
+    "cells": "CO2 cells whose same-day CH4 is observed (and CO2 observed, for scoring); the same cells are used for the unconditional and conditional scores",
+    "metrics": "CO2 80% coverage, width, MIS80, CRPS, absolute error of the median; by season and station; the reverse direction (CH4 given observed CO2) is reported as a supplement",
+    "comparisons": "G conditional vs G unconditional (value of knowing CH4); G conditional vs H conditional (value of the conditional linkage); month-block bootstrap, 95% intervals",
+    "expectation_written_before": "gains in winter and spring, little in summer, where the learned linkage is near zero",
+    "change_after_first_summary": "the pre-registered linear adjustment on raw values produced absurd scores at BRW (CO2 MIS80 9 -> 175): in windows whose CH4 history is almost constant (mostly filled gaps) the model's CH4 spread is ~0, the slope cov/var explodes and the observed CH4 lies far outside the samples. Replaced (after seeing that summary) by the same regression adjustment done in rank (normal-score) space: the observed CH4 enters through its bounded rank among the CH4 samples and the conditional CO2 stays inside the model's own CO2 sample range. MLO results were not affected by the problem."
+  },
+  "co2_only_two_station_table": {
+    "fixed_before_computing": true,
+    "date": "2026-09-30",
+    "user_instruction": "不考虑联动的评分，只考虑二氧化碳的覆盖率和各种分数，加在原来 12 种方案的表上；改成两个站 (2026-09-30)",
+    "old_rows": "the 12 schemes of 07_报告/12种方案对照.md (base project split: train 2017-2022, validation 2023, calibration 2024, test 2025 = 15 windows, 14-day grid) restricted to BRW+MLO from each run's saved per-station metrics (metrics.json by_station, or bystation.csv for the two deleted last-2-layer runs); per seed the two stations are pooled by their numbers of observed cells (RMSE through squared errors), then averaged over seeds as in the old table. Energy Score cannot be derived from per-station scores and the old samples were not kept: shown as '-'. Check: pooling all four stations must reproduce the old table.",
+    "new_rows": {
+      "G_old_split_grid": "the round-3 model G with unchanged settings, retrained on the old split with the old 14-day-grid windows that also have CH4 (train 134, validation 8, calibration 12, test 14; window 2025-12-16 has no CH4 history), seeds 17/29/43",
+      "G_old_split_daily": "supplementary: same years (train targets 2017-2022, validation 2023) but daily windows (1855 training windows; validation every 7th daily window of 2023), same calibration and test windows",
+      "native_timesfm_14": "native TimesFM recomputed on the same 14 test / 12 calibration windows (anchor for the new rows; shows the effect of the missing window)"
+    },
+    "metrics": "CO2 only (BRW, MLO): MAE, RMSE, CRPS, ES (2 stations x 14 days), WIS9, 80% coverage / width / MIS80 before calibration (raw) and after per-station-per-lead CQR expansion fitted on the calibration windows (cal), exactly as in the old table. Conformal calibration is computed only to fill the old table's columns; the model itself is unchanged.",
+    "supplementary_large_test": "CO2-only raw and cal metrics of native TimesFM and G on the rolling test windows (2020-2025, 1271 windows; calibration on the previous year's windows, which for G is also its epoch-selection year)"
+  }
+}

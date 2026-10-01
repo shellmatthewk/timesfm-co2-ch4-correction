@@ -1,0 +1,35 @@
+{
+ "arm": "T1",
+ "fold": 2020,
+ "seed": 29,
+ "best_epoch": 76,
+ "epochs_run": 80,
+ "best_val": 0.9199613930538757,
+ "seconds": 93.67332029342651,
+ "windows": {
+  "train": 2569,
+  "validation": 321,
+  "test": 195
+ },
+ "lstm_training": {
+  "best_validation_nll": 0.38920858502388,
+  "steps": 224,
+  "validation_nll_at_start": 0.5880193710327148
+ },
+ "learned_gamma_test": {
+  "BRW": {
+   "all": 0.6277596354484558,
+   "DJF": 1.1364954710006714,
+   "MAM": null,
+   "JJA": 0.5762836933135986,
+   "SON": 0.5821941494941711
+  },
+  "MLO": {
+   "all": 0.21097350120544434,
+   "DJF": -0.42281508445739746,
+   "MAM": null,
+   "JJA": 0.2797049582004547,
+   "SON": 0.2629256546497345
+  }
+ }
+}

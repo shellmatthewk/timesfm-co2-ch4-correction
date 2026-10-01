@@ -1,0 +1,5 @@
+{
+ "best_validation_nll": 0.44810205698013306,
+ "steps": 303,
+ "validation_nll_at_start": 0.6905511021614075
+}

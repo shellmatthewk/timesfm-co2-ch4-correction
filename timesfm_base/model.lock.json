@@ -1,0 +1,17 @@
+{
+  "repo_id": "google/timesfm-3.0-pytorch",
+  "revision": "43046b85ec22d584a13f8098c2ed39c889e129c2",
+  "source_commit": "e31dadd84cb26bd5153fde6687502b8312e918fb",
+  "local_directory": "models/timesfm3",
+  "weights_license": "timesfm-non-commercial-license-v1.0",
+  "files": {
+    "config.json": {
+      "sha256": "ff17bbc07b792c5a904cca265b8468579d736a4fe84981da25eb871b0a125bc6",
+      "bytes": 1273
+    },
+    "model.safetensors": {
+      "sha256": "a7592b0a8432baee54483254e5647856911ce69e09d09a9bb65904b2d98f17da",
+      "bytes": 1322898824
+    }
+  }
+}

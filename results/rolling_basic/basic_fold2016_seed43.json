@@ -1,0 +1,13 @@
+{
+ "fold": 2016,
+ "seed": 43,
+ "best_epoch": 4,
+ "epochs_run": 16,
+ "best_validation_es": 1.0019312792174866,
+ "seconds": 53.252702951431274,
+ "windows": {
+  "train": 4354,
+  "validation": 46,
+  "test": 308
+ }
+}

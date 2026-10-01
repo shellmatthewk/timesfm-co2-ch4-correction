@@ -1,0 +1,67 @@
+{
+  "experiment": "four_station_residual_engression_station_noise",
+  "date": "2026-09-28",
+  "task": "four stations (BRW, MLO, SMO, SPO), past 14 days -> next 14 days per station, ppm",
+  "question": "Residual Engression with median alignment feeds one noise vector to all four stations. Does giving every station its own noise vector remove the too-strong dependence between stations without losing anything else?",
+  "source_project": "01_实验项目/四站14天_残差Engression_20260923 (windows, frozen-feature caches, native head, NumPy implementation)",
+  "joint_metric_source": "01_实验项目/四站14天_Copula_Engression_20260928 (joint metrics code, and the per-window results of its methods for paired comparisons)",
+  "implementation": "numpy_float64_manual_gradients, the 9/23 code unchanged plus rq/station_noise.py",
+  "cases": {
+    "residual_centered_z1280": {
+      "noise": "shared",
+      "role": "control: the 9/23 case, one noise vector per trajectory shared by the four stations; must reproduce the 9/23 results exactly"
+    },
+    "residual_centered_station_z1280": {
+      "noise": "per_station",
+      "role": "the only change: one noise vector per trajectory and station"
+    }
+  },
+  "head": "residual_centered: sample = native Q50 + scale * (g([h, eps]) - median over samples of g); point forecast equals native Q50",
+  "seeds": [
+    17,
+    29,
+    43
+  ],
+  "noise_dim": 1280,
+  "hidden_dim": 64,
+  "noise_initial_std_normalized": 0.05,
+  "pair_weight": 0.5,
+  "train_samples": 16,
+  "validation_samples": 256,
+  "eval_samples": 512,
+  "batch_size": 32,
+  "head_lr": 0.0002,
+  "weight_decay": 0.01,
+  "grad_clip": 1.0,
+  "epochs": 80,
+  "patience": 12,
+  "selection": "validation standard ES (lambda=1/2), epoch 0 eligible, improvement threshold 1e-9",
+  "pre_declared_supplement": "Same rule as 9/23: if a case reaches epoch 80 without triggering patience, it is additionally run with max 300 epochs (everything else identical, validation-only selection) and reported as a separate supplementary row; the 80-epoch rows remain the primary result.",
+  "conformal_alpha": 0.2,
+  "conformal": "per_station_per_lead_expansion_only_split_CQR on 2024 (unchanged uq14/conformal.py); interval only, as for every other model of the project",
+  "recalibrated_samples": "additional evaluation: each cell's samples are mapped by one increasing function so that their Q10..Q90 move onto conformally widened values (2024, four central intervals, thresholds nondecreasing outwards). Ranks inside a cell are unchanged, so the dependence is unchanged. Gives joint metrics after calibration.",
+  "metrics": "single cell: unchanged uq14/metrics.py evaluate_predictions, before and after conformal. Joint: joint/metrics.py (unchanged copy of the copula project's module)",
+  "joint_metrics": {
+    "variogram_p": 0.5,
+    "band_level": 0.8,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260928
+  },
+  "splits": {
+    "train": "2017-2022",
+    "validation": "2023",
+    "calibration": "2024",
+    "test": "2025"
+  },
+  "stations": [
+    "BRW",
+    "MLO"
+  ],
+  "analysis_plan": {
+    "fixed_before_test_evaluation": "Both cases, all hyperparameters (copied from 9/23), the supplementary rule and the recalibration rule were written here before the per-station case was evaluated on 2025. No hyperparameter is tuned in this experiment.",
+    "primary": "per-station noise against the shared-noise control, paired over the 15 test windows: station-difference CRPS and coverage, four-station band coverage, four-station-mean CRPS (expected to improve); cell CRPS, MIS80 after conformal, within-station variogram score, station-mean CRPS (expected not to get worse)",
+    "secondary": "against TimesFM marginal + empirical copula (B3) and + static Gaussian copula (B2) of the copula project, before and after calibration"
+  },
+  "test_status": "2025 has been inspected in earlier experiments; no setting here is chosen from test results",
+  "two_station_rerun": "two-station rerun 2026-10-01: TimesFM reads only BRW and MLO and the head is trained on them; copied from 01_实验项目/四站14天_残差Engression_分站噪声_20260928, otherwise unchanged"
+}

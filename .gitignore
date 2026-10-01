@@ -1,0 +1,26 @@
+# TimesFM 3 权重（非商业许可，不放进仓库；下载方法见 README）
+timesfm_base/models/
+*.safetensors
+residual_engression/native_output_head.npz
+
+# 运行时生成的数据、编码、训练好的模型和日志（重新生成方法见 README）
+multigas/02_数据/
+multigas/03_模型/
+multigas/03_检查/
+multigas/06_结果/
+multigas/07_报告/
+training/
+logs/
+results/noise_pilot/
+results/noise_pilot_smoke/
+results/rolling_noise_smoke/
+results/rolling_basic_smoke/
+results/timesfm_rnet/
+
+# Python 环境和缓存
+.venv/
+__pycache__/
+*.pyc
+
+# 系统文件
+.DS_Store
