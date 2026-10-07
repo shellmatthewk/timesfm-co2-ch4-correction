@@ -1,0 +1,65 @@
+{
+  "name": "goes16_xrs_daily",
+  "output_root": "solar_runs",
+  "data": {
+    "source": "goes_xrs",
+    "path": "data/solar/goes16_xrs.csv",
+    "timestamp_column": "timestamp",
+    "start": "2018-01-01",
+    "end": "2024-12-31",
+    "cadence": "1D",
+    "native_cadence": "1min",
+    "aggregation": "mean",
+    "min_bin_coverage": 0.8,
+    "satellite": 16,
+    "channels": [
+      {"name": "xrsa", "unit": "W m-2", "transform": "log10", "quality_column": "xrsa_quality", "good_quality": 0},
+      {"name": "xrsb", "unit": "W m-2", "transform": "log10", "quality_column": "xrsb_quality", "good_quality": 0}
+    ]
+  },
+  "windows": {
+    "context": 14,
+    "horizon": 14,
+    "stride": 1,
+    "max_edge_gap": 7,
+    "max_internal_gap": 7,
+    "min_observed_history_fraction": 0.5
+  },
+  "evaluation": {
+    "test_years": [2022, 2023, 2024],
+    "train_start": "2018-01-01",
+    "train_years": null,
+    "validation_stride": 7,
+    "max_train_windows": null,
+    "max_validation_windows": null,
+    "max_test_windows": null,
+    "bootstrap_draws": 4000,
+    "bootstrap_seed": 20260929
+  },
+  "model": {
+    "methods": ["persistence", "timesfm", "basic", "residual", "T1", "N1"],
+    "device": "auto",
+    "encode_batch": 8,
+    "noise_dim": 1280,
+    "hidden_dim": 64,
+    "rule_hidden_dim": 16,
+    "initial_noise_scale": 0.05,
+    "calendar_features": false
+  },
+  "training": {
+    "seeds": [17, 29, 43],
+    "epochs": 80,
+    "patience": 12,
+    "batch_size": 32,
+    "head_train_samples": 16,
+    "adjustment_train_samples": 64,
+    "validation_samples": 256,
+    "evaluation_samples": 512,
+    "sample_chunk": 8,
+    "head_lr": 0.0002,
+    "rule_lr": 0.001,
+    "weight_decay": 0.01,
+    "grad_clip": 1.0,
+    "threads": 2
+  }
+}

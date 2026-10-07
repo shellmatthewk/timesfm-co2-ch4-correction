@@ -1,0 +1,9 @@
+# Separate solar environment; do not inherit the historical CO2 version pins.
+numpy>=2.4.1,<3
+scipy>=1.15,<2
+torch>=2.6,<3
+huggingface_hub>=1,<3
+safetensors>=0.8,<1
+pandas>=2.2,<4
+# TimeSeries imports SunPy's plotting helpers even for numerical-only ingestion.
+sunpy[net,timeseries,visualization]>=8.0,<9

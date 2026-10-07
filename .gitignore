@@ -19,6 +19,10 @@ results/timesfm_rnet/
 
 # Python 环境和缓存
 .venv/
+.venv-solar/
+solar_runs/
+data/solar/
+.pytest_cache/
 __pycache__/
 *.pyc
 

@@ -1,0 +1,15 @@
+{
+  "name": "solar_csv",
+  "data": {
+    "source": "csv",
+    "path": "data/solar/input.csv",
+    "start": "2010-01-01",
+    "end": "2025-12-31",
+    "cadence": "1D",
+    "native_cadence": "1D",
+    "channels": [{"name": "f107", "unit": "sfu", "transform": "identity"}]
+  },
+  "windows": {"context": 14, "horizon": 14, "stride": 1},
+  "evaluation": {"train_start": "2010-01-01", "test_years": [2020, 2021, 2022, 2023, 2024, 2025]},
+  "model": {"methods": ["persistence", "timesfm", "basic", "residual", "T1", "N1"]}
+}
