@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 from .config import file_sha, run_directory, write_json
-from .data import channel_names, fold_indices, inverse, load_windows
+from .data import channel_names, evaluation_times, fold_indices, inverse, load_windows
 from .models import (ForecastHead, apply_context, crps_loss, energy_score, fit_context,
                      native_samples, raw_context, training_scale)
 from .scoring import METRICS, bootstrap_difference, per_window, pooled
@@ -174,11 +174,13 @@ def run(cfg, years=None, seeds=None):
                 target.mkdir(parents=True, exist_ok=True)
                 if model is not None:
                     torch.save(model.state_dict(), target / f"seed{seed}_head.pt")
-                np.savez_compressed(target / f"seed{seed}_scores.npz", origins=windows["origin"][fold["test"]], **scores)
+                _, origins = evaluation_times(windows, cfg)
+                np.savez_compressed(target / f"seed{seed}_scores.npz", origins=origins[fold["test"]], **scores)
                 write_json(target / f"seed{seed}.json", {"method": method, "fold": year, "seed": seed,
                            "windows_sha256": audit["windows_sha256"],
                            "encoding_sha256": file_sha(out / "encoding.npz") if encoded is not None else None,
                            "environment": versions,
+                           "evaluation_date_basis": cfg["evaluation"]["date_basis"],
                            "windows": {k: len(v) for k, v in fold.items()}, **meta})
                 print(f"DONE {year} {method} seed={seed}: {len(fold['test'])} test windows", flush=True)
 
@@ -222,9 +224,10 @@ def report(cfg):
             raise ValueError("Methods do not score identical windows/cells")
     e = cfg["evaluation"]
     result = {"experiment": cfg["name"], "folds": complete, "missing_runs": missing, "reference": reference,
+              "evaluation_date_basis": e["date_basis"],
               "notes": "Pure forecasts. Scores in physical units. Seeds averaged before month-block bootstrap; intervals do not include retraining uncertainty.",
               "channels": {}}
-    lines = ["# Solar time-series experiment", "", f"Completed test years: {complete}. Reference: {reference}.",
+    lines = ["# Numerical time-series experiment", "", f"Completed test years: {complete}. Reference: {reference}.",
              "Scores use observed targets in physical units. Lower MIS80, CRPS and MAE are better; coverage should approach 80%.",
              "Three or fewer seeds may not capture training variability; the month-block intervals condition on the fitted runs.", ""]
     if cfg["name"] == "synthetic_demo":

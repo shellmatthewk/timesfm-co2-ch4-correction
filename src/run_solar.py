@@ -10,7 +10,7 @@ from solar_forecasting.config import DEFAULTS, METHODS, ROOT, load_config, run_d
 
 
 def parser():
-    p = argparse.ArgumentParser(description="Configurable solar time-series experiment based on the CO2 workflow")
+    p = argparse.ArgumentParser(description="Configurable numerical time-series experiment based on the CO2 workflow")
     p.add_argument("stage", choices=("inspect", "fetch", "prepare", "encode", "run", "report", "demo"))
     p.add_argument("--config", default=str(ROOT / "configs/solar_goes.json"))
     p.add_argument("--context", type=int, help="Number of historical time steps")

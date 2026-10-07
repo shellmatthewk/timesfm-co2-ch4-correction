@@ -22,6 +22,8 @@ results/timesfm_rnet/
 .venv-solar/
 solar_runs/
 data/solar/
+data/climate/
+climate_runs/
 .pytest_cache/
 __pycache__/
 *.pyc

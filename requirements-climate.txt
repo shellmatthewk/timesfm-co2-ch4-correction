@@ -1,0 +1,4 @@
+-r requirements-solar.txt
+xarray>=2024.1
+netCDF4>=1.7
+requests>=2.32

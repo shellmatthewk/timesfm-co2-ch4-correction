@@ -1,6 +1,8 @@
 """Regular numerical time series; history-only filling and chronological folds."""
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 
@@ -59,6 +61,10 @@ def read_panel(cfg):
         frame.loc[~np.isfinite(frame[c["name"]]), c["name"]] = np.nan
         if c.get("transform", "identity") == "log10":
             frame.loc[frame[c["name"]] <= 0, c["name"]] = np.nan
+        if c.get("transform", "identity") == "log1p":
+            frame.loc[frame[c["name"]] < 0, c["name"]] = np.nan
+        if "minimum" in c:
+            frame.loc[frame[c["name"]] < c["minimum"], c["name"]] = np.nan
     # A bin is labelled by its END, when the complete aggregate becomes available.
     # This prevents the first minutes of a day from seeing that day's final mean.
     resampler = frame[names].resample(spec["cadence"], closed="left", label="right", origin="start_day")
@@ -74,9 +80,19 @@ def read_panel(cfg):
     for j, c in enumerate(spec["channels"]):
         if c.get("transform", "identity") == "log10":
             model[:, j] = np.log10(physical[:, j])
-    audit = {"input_sha256": file_sha(path), "input_rows": len(frame), "bins": len(panel),
+        elif c.get("transform", "identity") == "log1p":
+            model[:, j] = np.log1p(physical[:, j])
+    digest = file_sha(path)
+    provenance = path.with_suffix(".provenance.json")
+    source_record = {}
+    if provenance.is_file():
+        metadata = json.loads(provenance.read_text(encoding="utf-8"))
+        if metadata.get("input_sha256") != digest:
+            raise ValueError("Input CSV does not match its source provenance")
+        source_record = {"source_provenance": metadata, "provenance_sha256": file_sha(provenance)}
+    audit = {"input_sha256": digest, "input_rows": len(frame), "bins": len(panel),
              "native_cadence": str(native), "cadence": spec["cadence"], "timestamp_convention": "bin end, UTC",
-             "channels": names, "observed_bins": dict(zip(names, np.isfinite(model).sum(0).tolist()))}
+             "channels": names, "observed_bins": dict(zip(names, np.isfinite(model).sum(0).tolist())), **source_record}
     return panel.index.tz_localize(None).to_numpy(dtype="datetime64[ns]"), model, physical, audit
 
 
@@ -126,10 +142,21 @@ def _cap(idx, maximum):
     return idx
 
 
+def evaluation_times(windows, cfg):
+    """Select measurement-bin starts or completed-bin ends for folds/reporting."""
+    target, origin = windows["target_times"], windows.get("origin")
+    if cfg["evaluation"]["date_basis"] == "bin_start":
+        delta = _fixed_offset(cfg["data"]["cadence"]).to_timedelta64()
+        target = target - delta
+        origin = origin - delta if origin is not None else None
+    return target, origin
+
+
 def fold_indices(windows, year, cfg):
     e = cfg["evaluation"]
-    first = windows["target_times"][:, 0]
-    last = windows["target_times"][:, -1]
+    target_times, _ = evaluation_times(windows, cfg)
+    first = target_times[:, 0]
+    last = target_times[:, -1]
     train_start = e["train_start"]
     if e["train_years"] is not None:
         train_start = max(train_start, f"{year - 1 - e['train_years']}-01-01")
@@ -148,11 +175,16 @@ def fold_indices(windows, year, cfg):
 def inverse(values, channels, channel_axis):
     out = np.asarray(values, dtype=np.float64).copy()
     for j, c in enumerate(channels):
+        sl = [slice(None)] * out.ndim
+        sl[channel_axis] = j
         if c.get("transform", "identity") == "log10":
-            sl = [slice(None)] * out.ndim
-            sl[channel_axis] = j
             with np.errstate(over="raise", invalid="raise"):
                 out[tuple(sl)] = np.power(10.0, out[tuple(sl)])
+        elif c.get("transform", "identity") == "log1p":
+            with np.errstate(over="raise", invalid="raise"):
+                out[tuple(sl)] = np.expm1(out[tuple(sl)])
+        if "minimum" in c:
+            out[tuple(sl)] = np.maximum(out[tuple(sl)], c["minimum"])
     if not np.isfinite(out).all():
         raise FloatingPointError("Nonfinite prediction after inverse transformation")
     return out
@@ -165,6 +197,7 @@ def prepare(cfg):
     out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out / "windows.npz", **windows)
     audit.update({"windows": len(windows["x"]), "excluded": excluded,
+                  "evaluation_date_basis": cfg["evaluation"]["date_basis"],
                   "windows_sha256": file_sha(out / "windows.npz"),
                   "folds": {str(y): {p: len(i) for p, i in fold_indices(windows, y, cfg).items()}
                             for y in cfg["evaluation"]["test_years"]}})
@@ -177,13 +210,16 @@ def prepare(cfg):
 
 
 def load_windows(cfg):
-    import json
     out = run_directory(cfg)
     if not (out / "windows.npz").is_file():
         return prepare(cfg)
     audit = json.loads((out / "data_audit.json").read_text(encoding="utf-8"))
     if audit["input_sha256"] != file_sha(resolve(cfg["data"]["path"])):
         raise ValueError("Input CSV changed. Run prepare and encode again before using cached results.")
+    if "provenance_sha256" in audit:
+        provenance = resolve(cfg["data"]["path"]).with_suffix(".provenance.json")
+        if not provenance.is_file() or file_sha(provenance) != audit["provenance_sha256"]:
+            raise ValueError("Source provenance changed. Run prepare and encode again.")
     if audit["windows_sha256"] != file_sha(out / "windows.npz"):
         raise ValueError("Window cache changed. Run prepare and encode again.")
     with np.load(out / "windows.npz", allow_pickle=False) as saved:

@@ -2,6 +2,8 @@
 
 This extension reuses the structure of the CO₂ experiment for numerical solar forecasting. SunPy retrieves GOES XRS data. Frozen TimesFM predicts future numerical values, and small heads adjust its predictions or uncertainty. Images are a possible later extension; this runner does not use them.
 
+The same numerical runner also supports daily SST and ERA5 experiments. See [CLIMATE_README.md](CLIMATE_README.md) for data downloads and CO₂-matched presets.
+
 The original CO₂ scripts and results are unchanged. Solar data, caches, trained heads and reports are kept under ignored directories.
 
 Solar dependencies are defined separately from the historical CO₂ version pins. Each run records its actual package versions in `environment.json` and per-run metadata.

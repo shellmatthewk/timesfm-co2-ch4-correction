@@ -2,6 +2,8 @@
 
 **New: configurable solar time-series experiments.** See [SOLAR_README.md](SOLAR_README.md) for SunPy GOES XRS ingestion and the numerical forecasting workflow. History length, forecast horizon, channels, data periods and training amounts can be changed in one JSON file. The original CO₂ scripts and saved results are preserved.
 
+**Climate data extension.** See [CLIMATE_README.md](CLIMATE_README.md) for daily NOAA OISST, ERA5 temperature and precipitation, copied CCAI reference files, and presets matching the current CO₂ main and confirmation periods.
+
 **English summary.** Probabilistic 14-day forecasts of daily CO₂ at two NOAA stations, Utqiaġvik (BRW, Alaska) and Mauna Loa (MLO, Hawaii), built on the frozen TimesFM 3 foundation model. Ten schemes are compared on a rolling large-sample test (test years 2020–2025, confirmation 2014–2019):
 - TimesFM itself;
 - a basic Engression head;

@@ -18,6 +18,7 @@ DEFAULTS = {
     "windows": {"context": 14, "horizon": 14, "stride": 1, "max_edge_gap": 7,
                 "max_internal_gap": 7, "min_observed_history_fraction": 0.5},
     "evaluation": {"test_years": [2022, 2023, 2024], "train_start": "2018-01-01",
+                   "date_basis": "bin_end",
                    "train_years": None, "validation_stride": 7, "max_train_windows": None,
                    "max_validation_windows": None, "max_test_windows": None,
                    "bootstrap_draws": 4000, "bootstrap_seed": 20260929},
@@ -76,10 +77,13 @@ def validate(cfg):
     for channel in channels:
         if not isinstance(channel, dict) or not isinstance(channel.get("name"), str) or not channel["name"]:
             raise ValueError("Every channel needs a nonempty name")
-        if set(channel) - {"name", "unit", "transform", "quality_column", "good_quality"}:
+        if set(channel) - {"name", "unit", "transform", "quality_column", "good_quality", "minimum"}:
             raise ValueError(f"Unknown channel settings: {channel}")
-        if channel.get("transform", "identity") not in ("identity", "log10"):
-            raise ValueError("Channel transform must be identity or log10")
+        if channel.get("transform", "identity") not in ("identity", "log10", "log1p"):
+            raise ValueError("Channel transform must be identity, log10 or log1p")
+        if "minimum" in channel and (isinstance(channel["minimum"], bool) or not isinstance(channel["minimum"], (float, int))
+                                    or not float('-inf') < channel["minimum"] < float('inf')):
+            raise ValueError("Channel minimum must be a finite number")
         names.append(channel["name"])
     if len(set(names)) != len(names):
         raise ValueError("Channel names must be unique")
@@ -91,6 +95,8 @@ def validate(cfg):
         raise ValueError("windows.min_observed_history_fraction must be in (0, 1]")
     if not isinstance(e["test_years"], list) or not e["test_years"]:
         raise ValueError("evaluation.test_years must be a nonempty list")
+    if e["date_basis"] not in ("bin_start", "bin_end"):
+        raise ValueError("evaluation.date_basis must be bin_start or bin_end")
     for year in e["test_years"]:
         positive(year, "test year", 1900)
     if e["test_years"] != sorted(set(e["test_years"])):

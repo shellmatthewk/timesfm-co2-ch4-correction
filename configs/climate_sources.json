@@ -1,0 +1,23 @@
+{
+  "start": "1999-12-01",
+  "end": "2025-12-31",
+  "ccai_directory": "C:/projects/ccai-transformer-viability",
+  "sst": {
+    "base_url": "https://psl.noaa.gov/thredds/dodsC/Datasets/noaa.oisst.v2.highres",
+    "points": [
+      {"name": "north_atlantic", "latitude": 40.0, "longitude": -40.0},
+      {"name": "northeast_pacific", "latitude": 35.0, "longitude": -125.0},
+      {"name": "equatorial_pacific", "latitude": 0.0, "longitude": -150.0},
+      {"name": "indian_ocean", "latitude": -10.0, "longitude": 80.0}
+    ]
+  },
+  "era5": {
+    "base_url": "https://archive-api.open-meteo.com/v1/archive",
+    "points": [
+      {"name": "edinburgh", "latitude": 56.0, "longitude": -3.25},
+      {"name": "madrid", "latitude": 40.5, "longitude": -3.75},
+      {"name": "helsinki", "latitude": 60.25, "longitude": 25.0},
+      {"name": "athens", "latitude": 38.0, "longitude": 23.75}
+    ]
+  }
+}
